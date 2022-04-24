@@ -1,0 +1,227 @@
+# Xandra
+
+## Section
+
+```elixir
+Mix.install([{:xandra, "~> 0.13"}])
+```
+
+```elixir
+defmodule GetChain do
+  @moduledoc false
+  import Xandra
+
+  def chain_size() do
+    address =
+      <<0, 0, 122, 208, 96, 248, 171, 118, 100, 65, 143, 194, 32, 106, 197, 158, 33, 53, 175, 218,
+        117, 98, 0, 160, 216, 59, 134, 172, 1, 39, 127, 187, 77, 209>>
+
+    {:ok, conn} = Xandra.start_link(nodes: ["127.0.0.1:9042"])
+
+    prepared =
+      Xandra.prepare!(
+        conn,
+        "SELECT COUNT(*) as size FROM archethic.transaction_chains WHERE chain_address=? "
+      )
+
+    [size] =
+      conn
+      |> Xandra.execute!(prepared, [address])
+      |> Enum.map(fn %{"size" => size} -> size end)
+
+    size
+  end
+
+  def main() do
+    time = DateTime.utc_now()
+
+    chain_address =
+      <<0, 0, 122, 208, 96, 248, 171, 118, 100, 65, 143, 194, 32, 106, 197, 158, 33, 53, 175, 218,
+        117, 98, 0, 160, 216, 59, 134, 172, 1, 39, 127, 187, 77, 209>>
+
+    {txn, more?, page_state} = get_transaction_chain(chain_address, after_time: time, page: nil)
+    d = ArchEthic.DB.CassandraImpl
+
+    d.get_transaction_chain(
+      <<0, 0, 122, 208, 96, 248, 171, 118, 100, 65, 143, 194, 32, 106, 197, 158, 33, 53, 175, 218,
+        117, 98, 0, 160, 216, 59, 134, 172, 1, 39, 127, 187, 77, 209>>,
+      after_time: DateTime.from_unix!(0),
+      page: nil
+    )
+
+    IO.inspect({more?})
+
+    acc =
+      renew(chain_address, time, {txn, page_state}, [])
+      |> Enum.uniq()
+  end
+
+  def renew(chain_address, time, {txn, nil}, acc), do: acc
+
+  def renew(chain_address, time, {txn, page_state}, acc) do
+    {txn, more?, page_state} =
+      get_transaction_chain(chain_address, after_time: time, page: page_state)
+
+    IO.inspect({more?})
+    renew(chain_address, time, {txn, page_state}, [txn | acc])
+  end
+
+  def get_transaction_chain(
+        address,
+        [after_time: after_time, page: current_page_state] = options \\ [],
+        fields \\ []
+      )
+      when is_binary(address) and is_list(fields) and is_list(options) do
+    {:ok, conn} = Xandra.start_link(nodes: ["127.0.0.1:9042"])
+
+    {query, query_params} = get_transaction_chain_query(address, options)
+    prepared_statement = Xandra.prepare!(conn, query)
+
+    execute_options = get_transaction_chain_options(address, options)
+    # |>IO.inspect()
+
+    {:ok, page} = Xandra.execute(conn, prepared_statement, query_params, execute_options)
+    # IO.inspect(page)
+    paging_state = page.paging_state
+
+    more? = page.paging_state != nil
+
+    # addresses_to_fetch =
+    # Enum.map( page , fn %{"transaction_address" => tx_address} ->  tx_address end)
+    # # |>IO.inspect(label: "listtransaction_address")
+
+    chain =
+      Enum.map(page, fn %{"transaction_address" => tx_address} -> tx_address end)
+      |> chunk_get_transaction(fields)
+      |> Enum.flat_map(& &1)
+
+    {chain, more?, paging_state}
+  end
+
+  defp get_transaction_chain_query(address, after_time: after_time, page: current_page_state)
+       when is_nil(after_time) do
+    IO.inspect("nil")
+
+    {" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? ",
+     [address]}
+  end
+
+  defp get_transaction_chain_query(address,
+         after_time: %DateTime{} = after_time,
+         page: current_page_state
+       ) do
+    IO.inspect(after_time)
+    #  >= WHEN  ORIGINAL CODE IS
+    {" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp <= ? ",
+     [address, after_time]}
+  end
+
+  defp get_transaction_chain_options(address, after_time: after_time, page: nil),
+    do: [page_size: 2]
+
+  defp get_transaction_chain_options(address, after_time: after_time, page: current_page_state)
+       when is_binary(current_page_state),
+       do: [page_size: 2, paging_state: current_page_state]
+
+  defp chunk_get_transaction(addresses, fields) do
+    {:ok, conn} = Xandra.start_link(nodes: ["127.0.0.1:9042"])
+
+    Xandra.run(conn, fn conn ->
+      Enum.map(addresses, fn address ->
+        {:ok, tx} = do_get_transaction(conn, address, fields)
+        tx
+      end)
+    end)
+  end
+
+  defp do_get_transaction(conn, address, fields) do
+    prepared =
+      Xandra.prepare!(
+        conn,
+        "SELECT * FROM archethic.transactions WHERE address=?"
+      )
+
+    results = Xandra.execute!(conn, prepared, [address])
+
+    case Enum.at(results, 0) do
+      nil ->
+        {:error, :transaction_not_exists}
+
+      tx ->
+        {:ok, format_result_to_transaction(tx)}
+    end
+  end
+
+  defp format_result_to_transaction(res) do
+    res
+    |> Map.drop(["bucket", "chain_address", "timestamp"])
+  end
+
+  # defp replicate_transaction_chain(nodes,address,
+  #        time_after = %DateTime{},
+  #        page_state \\ nil,
+  #        prev_result \\ nil
+  #      )
+
+  # defp replicate_transaction_chain([node | rest], address, time_after = %DateTime{} | nil, page_state \\ nil, _prev_result) do
+  #   message =  %GetTransactionChain{
+  #     address: address,
+  #     after: time_after,
+  #     page: page_state
+  #   }
+
+  #   case P2P.send_message(node, message) do
+  #     # ------------------------------------------------------------------
+  #     #  case 1: if  txn_chain have many transactions and more than one page of data and more page  is pending
+  #     #  then process transactions and request for next page data from same node against same time after
+  #     #  if any error look for same data and time_after from another nodes
+  #     {:ok, %TransactionList{transactions: transactions, more?: true, page: page}}  ->
+  #       case process_transactions(transactions, address, time_after, page) do
+  #         {:ok, new_time_after} ->
+  #           replicate_transaction_chain([node | rest], address, time_after, page, [])
+
+  #         {:error, _} ->
+  #           replicate_transaction_chain(rest, address, time_after, nil, [])
+  #       end
+
+  #     # ------------------------------------------------------------------
+  #     #  case 2: if txn_chain have many transactions and more than one page of data and NO more page is pending
+  #     #  then process transactions and get new_time_after from last transaction.
+  #     #  then fetch for more Txn chain against same address and new_time_after from last_transaction
+  #     #  from the remaining nodes, with page state nil.if error proceed with rest of nodes
+  #     {:ok, %TransactionList{transactions: transactions, more?: false, page: nil}}  ->
+  #       case process_transactions(transactions, address, time_after, page) do
+  #         {:ok, new_time_after} ->
+  #           replicate_transaction_chain(rest, address, new_time_after, nil, [])
+
+  #         {:error, _} ->
+  #           replicate_transaction_chain(rest, address, time_after, nil, [])
+  #       end
+
+  #     # ------------------------------------------------------------------
+  #     #  case 0: erraneou cases
+  #     {:ok, %TransactionList{transactions: _ | [], more?: _, page: _ | nil}} ->
+  #       replicate_transaction_chain(rest, address, time_after, nil, [])
+  #   end
+  # end
+
+  # # return error if we cant fetch the transactions w.r.t address
+  # defp replicate_transaction_chain([], _address, _time_after, _page_state, nil), do: {:error, []}
+
+  # # determines end of recusion by marking empty nodes list and return {:ok , []}
+  # defp replicate_transaction_chain([], _address, _time_after, _page_state, prev_result),
+  #   do: {:ok, prev_result}
+
+  # defp process_transactions(_transactions, _address, time_after, _page) do
+  #   # case write_to_db(transactions,address,page)// includes validate.veridfytxndo
+  #   #   {:ok,new_time_after} -> {:ok,new_time_after}
+  #   #   {:error,_} ->        {:error, time_after}
+  #   #   {_,_} ->        {:error, time_after}
+  #   {:ok, time_after}
+  # end
+end
+```
+
+```elixir
+GetChain.main()
+```

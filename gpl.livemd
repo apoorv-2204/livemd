@@ -1,0 +1,173 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Untitled notebook
+
+## Section
+
+```elixir
+Mix.install([
+  {:websockex, "~> 0.4.3"},
+  {:json, "~> 1.4"},
+  {:exjsonpath, "~> 0.9.0"},
+  {:jason, "~> 1.2"},
+  {:gun, "~> 1.3"},
+  {:websocket_client, "~> 1.4"},
+  {:mox, "~> 1.0"},
+  {:common_graphql_client, "~> 0.6.4"},
+  {:absinthe_graphql_ws, "~> 0.3.5"},
+  {:absinthe_graphql_ws, "~> 0.3"},
+  {:absinthe, "~> 1.7"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: the dependency :absinthe_graphql_ws is duplicated at the top level, please remove one of them
+warning: the dependency :absinthe_graphql_ws is duplicated at the top level, please remove one of them
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+```elixir
+defmodule WsClient do
+  use WebSockex
+
+  def start_link(state = %{}) do
+    url = "ws://127.0.0.1:4000/socket/websocket"
+    WebSockex.start_link(url, __MODULE__, state)
+  end
+
+  @impl true
+  def handle_connect(conn, state) do
+    state = %{conn: conn}
+    IO.inspect("Connected!")
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_frame({:text, msg}, state) do
+    IO.inspect("Received Message: #{msg}")
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:send, {type, msg} = frame}, state) do
+    IO.puts("Sending #{type} frame with payload: #{msg}")
+    {:reply, frame, state}
+  end
+
+  @impl true
+  def handle_info(msg, state) do
+    IO.inspect(msg)
+    {:reply, state}
+  end
+
+  @impl true
+  def handle_disconnect(%{reason: {:local, reason}}, state) do
+    Logger.info("Local close with reason: #{inspect(reason)}")
+    {:ok, state}
+  end
+
+  def handle_disconnect(disconnect_map, state) do
+    super(disconnect_map, state)
+  end
+
+  @impl true
+  def terminate(reason, _state) do
+    IO.puts("WebSockex for remote debbugging on porerminating with reason: #{inspect(reason)}")
+    exit(:normal)
+  end
+
+  @impl true
+  def handle_ping(ping_frame, state) do
+    IO.inspect("pingframe#{ping_frame}")
+    {:reply, state}
+  end
+
+  @impl true
+  def handle_pong(pong_frame, state) do
+    IO.inspect("pongframe#{pong_frame}")
+    {:reply, state}
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: variable "state" is unused (if the variable is not meant to be used, prefix it with an underscore)
+  Documents/livmd/gpl.livemd#cell:10: WsClient.handle_connect/2
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, WsClient, <<70, 79, 82, 49, 0, 0, 21, ...>>, {:handle_pong, 2}}
+```
+
+```elixir
+query =
+  "subscription { transactionConfirmed(address: \"0000c084b09c60e3bde2d0a81df08b20d82d8b6dfc1d39bc3dfa5e41b731718f09e1\") { address, nbConfirmations } }"
+
+address = "000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D"
+
+# topic = Jason.encode!(%{"address" => "#{address}"})
+topic = Jason.encode!(address)
+
+# Base.encode16(address)
+
+msg1 = %{
+  "variables" => nil,
+  "ref" => "",
+  "payload" => "vsn: 2.0.0",
+  "event" => [:absinthe, :subscription, :publish, :start],
+  "topic" => topic,
+  "query" =>
+    "subscription { transactionConfirmed(address: #{address} ) { address, nbConfirmations } }"
+}
+
+msg2 =
+  t2 = %{
+    "ref" => "",
+    "payload" => "vsn: 2.0.0",
+    "event" => "doc",
+    "topic" => topic,
+    "query" => query
+  }
+
+{:ok, pid} = WsClient.start_link(%{})
+
+# WebSockex.cast(pid, {:send, {:text, d}})
+
+WebSockex.cast(pid, {:send, {:text, Jason.encode!(msg1)}})
+
+WebSockex.cast(pid, {:send, {:text, Jason.encode!(msg2)}})
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+"Connected!"
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Sending text frame with payload: {"event":["absinthe","subscription","publish","start"],"payload":"vsn: 2.0.0","query":"subscription { transactionConfirmed(address: 000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D ) { address, nbConfirmations } }","ref":"","topic":"\"000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D\"","variables":null}
+Sending text frame with payload: {"event":"doc","payload":"vsn: 2.0.0","query":"subscription { transactionConfirmed(address: \"0000c084b09c60e3bde2d0a81df08b20d82d8b6dfc1d39bc3dfa5e41b731718f09e1\") { address, nbConfirmations } }","ref":"","topic":"\"000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D\""}
+"Received Message: {\"event\":\"phx_reply\",\"payload\":{\"response\":{\"reason\":\"unmatched topic\"},\"status\":\"error\"},\"ref\":\"\",\"topic\":\"\\\"000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D\\\"\"}"
+WebSockex for remote debbugging on porerminating with reason: %WebSockex.BadResponseError{args: [{:text, "{\"event\":\"phx_reply\",\"payload\":{\"response\":{\"reason\":\"unmatched topic\"},\"status\":\"error\"},\"ref\":\"\",\"topic\":\"\\\"000068A9CC4F77F39C3CAAB4B38302B1ED61117BFD6F937FF9892599F5C78E893B4D\\\"\"}"}, %{conn: %WebSockex.Conn{cacerts: nil, conn_mod: :gen_tcp, extra_headers: [], host: "127.0.0.1", insecure: true, path: "/socket/websocket", port: 4000, query: nil, resp_headers: [{:Upgrade, "websocket"}, {:Server, "Cowboy"}, {"Sec-Websocket-Accept", "h2IpQan6pTG9UezFEw1bYXNQAno="}, {:Date, "Thu, 21 Apr 2022 10:47:54 GMT"}, {:Connection, "Upgrade"}, {:"Cache-Control", "max-age=0, private, must-revalidate"}], socket: #Port<0.27>, socket_connect_timeout: 6000, socket_recv_timeout: 5000, ssl_options: nil, transport: :tcp}}], function: :handle_frame, module: WsClient, response: {:noreply, %{conn: %WebSockex.Conn{cacerts: nil, conn_mod: :gen_tcp, extra_headers: [], host: "127.0.0.1", insecure: true, path: "/socket/websocket", port: 4000, query: nil, resp_headers: [{:Upgrade, "websocket"}, {:Server, "Cowboy"}, {"Sec-Websocket-Accept", "h2IpQan6pTG9UezFEw1bYXNQAno="}, {:Date, "Thu, 21 Apr 2022 10:47:54 GMT"}, {:Connection, "Upgrade"}, {:"Cache-Control", "max-age=0, private, must-revalidate"}], socket: #Port<0.27>, socket_connect_timeout: 6000, socket_recv_timeout: 5000, ssl_options: nil, transport: :tcp}}}}
+```

@@ -1,0 +1,320 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Untitled notebook
+
+## Section
+
+```elixir
+Mix.install([
+  {:websockex, "~> 0.4.3"},
+  {:json, "~> 1.4"},
+  {:exjsonpath, "~> 0.9.0"},
+  {:jason, "~> 1.2"},
+  {:gun, "~> 1.3"},
+  {:websocket_client, "~> 1.4"},
+  {:mox, "~> 1.0"},
+  {:common_graphql_client, "~> 0.6.4"},
+  {:absinthe_graphql_ws, "~> 0.3.5"},
+  {:absinthe, "~> 1.7"},
+  {:phoenix_client, "~> 0.3"},
+  {:simple_graphql_client, "~> 0.2.1"}
+])
+```
+
+```elixir
+defmodule Worker do
+  use GenServer
+
+  alias PhoenixClient.{Socket, Channel, Message}
+
+  def start(_opts) do
+    socket_opts = [
+      url: "ws://localhost:4000/socket/websocket"
+    ]
+
+    {:ok, socket} = PhoenixClient.Socket.start_link(socket_opts)
+    {:ok, _response, channel} = Channel.join(socket, "__absinthe__:control")
+
+    {:ok,
+     %{
+       channel: channel
+     }}
+  end
+
+  # do some work, call `Channel.push` ...
+
+  def handle_info(%Message{event: "incoming:msg", payload: payload}, state) do
+    IO.puts("Incoming Message: #{inspect(payload)}")
+    {:noreply, state}
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: function init/1 required by behaviour GenServer is not implemented (in module Worker).
+
+We will inject a default implementation for now:
+
+    def init(init_arg) do
+      {:ok, init_arg}
+    end
+
+You can copy the implementation above or define your own that converts the arguments given to GenServer.start_link/3 to the server state.
+
+  Documents/gpl.livemd#cell:1: Worker (module)
+
+warning: unused alias Socket
+  Documents/gpl.livemd#cell:4
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Worker, <<70, 79, 82, 49, 0, 0, 20, ...>>, {:handle_info, 2}}
+```
+
+```elixir
+socket_opts = [
+  url: "ws://127.0.0.1:4000/socket/websocket?vsn=2.0.0"
+]
+
+{:ok, socket} = PhoenixClient.Socket.start_link(socket_opts)
+{:ok, _response, channel} = PhoenixClient.Channel.join(socket, "__absinthe__:control")
+
+# {:ok, _response, channel} = PhoenixClient.Channel.join(socket, "__absinthe__:control")
+```
+
+```elixir
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+nil
+```
+
+```elixir
+defmodule WSClient do
+  use GenServer
+
+  alias Absinthe.GraphqlWS.Client
+
+  def start(endpoint) do
+    Client.start(endpoint)
+  end
+
+  def stop(client) do
+    Client.close(client)
+  end
+
+  # handler is a pid for a process that implements `handle_info/4` as below
+  def subsscribe({:sub, query}, client, thing_id: thing_id) do
+    IO.inspect(binding())
+    Client.subscribe(self(), query, %{thingId: 1}, self())
+  end
+
+  def handle_info(data, socket) do
+    IO.inspect(binding())
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: function init/1 required by behaviour GenServer is not implemented (in module WSClient).
+
+We will inject a default implementation for now:
+
+    def init(init_arg) do
+      {:ok, init_arg}
+    end
+
+You can copy the implementation above or define your own that converts the arguments given to GenServer.start_link/3 to the server state.
+
+  Documents/gpl.livemd#cell:1: WSClient (module)
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, WSClient, <<70, 79, 82, 49, 0, 0, 20, ...>>, {:handle_info, 2}}
+```
+
+```elixir
+query =
+  "subscription { transactionConfirmed(address: \"0000c084b09c60e3bde2d0a81df08b20d82d8b6dfc1d39bc3dfa5e41b731718f09e1\") { address, nbConfirmations } }"
+
+address = "0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45"
+
+t = %{
+  "variables" => nil,
+  "ref" => "",
+  "payload" => "vsn: 2.0.0",
+  "event" => [:absinthe, :subscription, :publish, :start],
+  "topic" => "topic",
+  "query" =>
+    "subscription { transactionConfirmed(address: #{address} ) { address, nbConfirmations } }"
+}
+
+topic = "transaction_confirmed: #{address}"
+
+{:ok, pid} =
+  Absinthe.GraphqlWS.Client.start(
+    "ws://127.0.0.1:4000/socket/websocket?vsn=2.0.0",
+    %{"topic" => Jason.encode!(topic)}
+  )
+
+# WSClient.subsscribe({:sub, query} , pid, thing_id: 1)
+# IO.inspect(binding())
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+
+03:09:31.472 [error] GenServer #PID<0.925.0> terminating
+** (stop) :server_closed
+Last message: {:gun_ws, #PID<0.926.0>, #Reference<0.1466083351.1908670466.125025>, {:close, 1011, ""}}
+State: %Absinthe.GraphqlWS.Client{gun: #PID<0.926.0>, gun_process_monitor: #Reference<0.1466083351.1908670466.125028>, gun_stream_ref: #Reference<0.1466083351.1908670466.125025>, listeners: %{}, monitor: Process, queries: %{}, transport: :gun}
+
+```
+
+```elixir
+defmodule WsClient do
+  use WebSockex
+
+  def start_link(state = %{}) do
+    url = "ws://127.0.0.1:4000/socket/websocket"
+    WebSockex.start_link(url, __MODULE__, state)
+  end
+
+  @impl true
+  def handle_connect(conn, state) do
+    state = %{conn: conn}
+    IO.inspect("Connected!")
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_frame({:text, msg}, state) do
+    IO.inspect("Received Message: #{msg}")
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:send, {type, msg} = frame}, state) do
+    IO.puts("Sending #{type} frame with payload: #{msg}")
+    {:reply, frame, state}
+  end
+
+  @impl true
+  def handle_info(msg, state) do
+    IO.inspect(msg)
+    {:reply, state}
+  end
+
+  @impl true
+  def handle_disconnect(%{reason: {:local, reason}}, state) do
+    Logger.info("Local close with reason: #{inspect(reason)}")
+    {:ok, state}
+  end
+
+  def handle_disconnect(disconnect_map, state) do
+    super(disconnect_map, state)
+  end
+
+  @impl true
+  def terminate(reason, _state) do
+    IO.puts("WebSockex for remote debbugging on porerminating with reason: #{inspect(reason)}")
+    exit(:normal)
+  end
+
+  @impl true
+  def handle_ping(ping_frame, state) do
+    IO.inspect("pingframe#{ping_frame}")
+    {:reply, state}
+  end
+
+  @impl true
+  def handle_pong(pong_frame, state) do
+    IO.inspect("pongframe#{pong_frame}")
+    {:reply, state}
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: variable "state" is unused (if the variable is not meant to be used, prefix it with an underscore)
+  Documents/gpl.livemd#cell:10: WsClient.handle_connect/2
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, WsClient, <<70, 79, 82, 49, 0, 0, 21, ...>>, {:handle_pong, 2}}
+```
+
+```elixir
+topic = "transaction_confirmed: #{address}"
+# Base.encode16(address)
+
+msg1 = %{
+  "variables" => nil,
+  "ref" => "",
+  "payload" => "vsn: 2.0.0",
+  "event" => [:absinthe, :subscription, :publish, :start],
+  "topic" => topic,
+  "query" =>
+    "subscription { transactionConfirmed(address: #{address} ) { address, nbConfirmations } }"
+}
+
+msg2 =
+  t2 = %{
+    "ref" => "",
+    "payload" => "vsn: 2.0.0",
+    "event" => "doc",
+    "topic" => topic,
+    "query" => query
+  }
+
+{:ok, pid} = WsClient.start_link(%{})
+
+# WebSockex.cast(pid, {:send, {:text, d}})
+
+WebSockex.cast(pid, {:send, {:text, Jason.encode!(msg1)}})
+
+WebSockex.cast(pid, {:send, {:text, Jason.encode!(msg2)}})
+
+# WebSockex.cast(pid, {:send, {:text, Jason.encode!(t)}})
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+"Connected!"
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Sending text frame with payload: {"event":["absinthe","subscription","publish","start"],"payload":"vsn: 2.0.0","query":"subscription { transactionConfirmed(address: 0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45 ) { address, nbConfirmations } }","ref":"","topic":"transaction_confirmed: 0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45","variables":null}
+Sending text frame with payload: {"event":"doc","payload":"vsn: 2.0.0","query":"subscription { transactionConfirmed(address: \"0000c084b09c60e3bde2d0a81df08b20d82d8b6dfc1d39bc3dfa5e41b731718f09e1\") { address, nbConfirmations } }","ref":"","topic":"transaction_confirmed: 0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45"}
+"Received Message: {\"event\":\"phx_reply\",\"payload\":{\"response\":{\"reason\":\"unmatched topic\"},\"status\":\"error\"},\"ref\":\"\",\"topic\":\"transaction_confirmed: 0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45\"}"
+WebSockex for remote debbugging on porerminating with reason: %WebSockex.BadResponseError{args: [{:text, "{\"event\":\"phx_reply\",\"payload\":{\"response\":{\"reason\":\"unmatched topic\"},\"status\":\"error\"},\"ref\":\"\",\"topic\":\"transaction_confirmed: 0000EFC39EE41156787F843FF91E04E3DE1153D98FCB8B9DC49BF7CA442708FFFF45\"}"}, %{conn: %WebSockex.Conn{cacerts: nil, conn_mod: :gen_tcp, extra_headers: [], host: "127.0.0.1", insecure: true, path: "/socket/websocket", port: 4000, query: nil, resp_headers: [{:Upgrade, "websocket"}, {:Server, "Cowboy"}, {"Sec-Websocket-Accept", "I1zIxLrR0dkfAkdIEWK91uVSwMI="}, {:Date, "Wed, 20 Apr 2022 06:55:20 GMT"}, {:Connection, "Upgrade"}, {:"Cache-Control", "max-age=0, private, must-revalidate"}], socket: #Port<0.40>, socket_connect_timeout: 6000, socket_recv_timeout: 5000, ssl_options: nil, transport: :tcp}}], function: :handle_frame, module: WsClient, response: {:noreply, %{conn: %WebSockex.Conn{cacerts: nil, conn_mod: :gen_tcp, extra_headers: [], host: "127.0.0.1", insecure: true, path: "/socket/websocket", port: 4000, query: nil, resp_headers: [{:Upgrade, "websocket"}, {:Server, "Cowboy"}, {"Sec-Websocket-Accept", "I1zIxLrR0dkfAkdIEWK91uVSwMI="}, {:Date, "Wed, 20 Apr 2022 06:55:20 GMT"}, {:Connection, "Upgrade"}, {:"Cache-Control", "max-age=0, private, must-revalidate"}], socket: #Port<0.40>, socket_connect_timeout: 6000, socket_recv_timeout: 5000, ssl_options: nil, transport: :tcp}}}}
+```

@@ -1,0 +1,22 @@
+ (RuntimeError) Invalid previous transaction
+    (archethic 0.13.1) lib/archethic/mining/transaction_context.ex:104: ArchEthic.Mining.TransactionContext.wrap_async_queries/3
+    (archethic 0.13.1) lib/archethic/mining/transaction_context.ex:48: ArchEthic.Mining.TransactionContext.get/3
+    (archethic 0.13.1) lib/archethic/mining/standalone_workflow.ex:61: ArchEthic.Mining.StandaloneWorkflow.run/1
+    (elixir 1.13.0) lib/task/supervised.ex:89: Task.Supervised.invoke_mfa/2
+    (stdlib 3.17) proc_lib.erl:226: :proc_lib.init_p_do_apply/3
+Function: &ArchEthic.Mining.StandaloneWorkflow.run/1
+    Args: [[transaction: %ArchEthic.TransactionChain.Transaction{address: <<0, 0, 159, 54, 58, 184, 105, 87, 198, 206, 242, 78, 217, 93, 164, 99, 7, 140, 50, 81, 90, 46, 23, 15, 113, 237, 85, 67, 173, 183, 176, 26, 157, 75>>, cross_validation_stamps: [], data: %ArchEthic.TransactionChain.TransactionData{code: "  # We stop the inheritance of transaction by ensuring no other\n  # summary transaction will continue on this chain\n  condition inherit: [ content: \"\" ]\n", content: "{\"1649072700\":{\"uco\":{\"eur\":0.124496,\"usd\":0.136953}}}", ledger: %ArchEthic.TransactionChain.TransactionData.Ledger{nft: %ArchEthic.TransactionChain.TransactionData.NFTLedger{transfers: []}, uco: %ArchEthic.TransactionChain.TransactionData.UCOLedger{transfers: []}}, ownerships: [], recipients: []}, origin_signature: <<126, 22, 247, 146, 71, 70, 75, 238, 226, 251, 41, 237, 251, 99, 243, 26, 189, 108, 1, 142, 112, 119, 45, 4, 185, 170, 130, 231, 107, 101, 3, 210, 171, 154, 63, 216, 165, 56, 57, 117, 37, 222, 74, 98, ...>>, previous_public_key: <<0, 1, 72, 94, 51, 119, 30, 177, 125, 254, 178, 169, 161, 130, 64, 39, 245, 208, 203, 204, 60, 230, 236, 19, 19, 156, 138, 34, 252, 209, 75, 92, 103, 98>>, previous_signature: <<180, 178, 140, 193, 254, 250, 127, 178, 78, 35, 46, 236, 59, 229, 156, 29, 9, 69, 177, 245, 223, 219, 23, 5, 226, 94, 106, 171, 114, 105, 56, 35, 27, 194, 119, 65, 32, 232, 106, 192, 88, 236, ...>>, type: :oracle_summary, validation_stamp: nil, version: 1}]]
+2022-04-04 11:46:00.464 [error] Process #PID<0.26540.0> terminating
+** (RuntimeError) Invalid previous transaction
+    (archethic 0.13.1) lib/archethic/mining/transaction_context.ex:104: ArchEthic.Mining.TransactionContext.wrap_async_queries/3
+    (archethic 0.13.1) lib/archethic/mining/transaction_context.ex:48: ArchEthic.Mining.TransactionContext.get/3
+    (archethic 0.13.1) lib/archethic/mining/standalone_workflow.ex:61: ArchEthic.Mining.StandaloneWorkflow.run/1
+    (elixir 1.13.0) lib/task/supervised.ex:89: Task.Supervised.invoke_mfa/2
+    (stdlib 3.17) proc_lib.erl:226: :proc_lib.init_p_do_apply/3
+Initial Call: ArchEthic.Mining.StandaloneWorkflow.run/1
+Ancestors: [#PID<0.26539.0>, #PID<0.26538.0>]
+
+
+
+2022-04-04 11:45:40.962 transaction_address=0000FEE189E9740CC46C50781BF5793D029D0778A64E1C6806D028B91E57691F4A9B transaction_type=node_shared_secrets [error] Invalid proof of integrity
+

@@ -1,0 +1,233 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# lists pattern matching
+
+## Section
+
+```elixir
+Enum.split_while([1, 2, 3, 4], fn x -> x < 3 end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{[1, 2], [3, 4]}
+```
+
+```elixir
+all_Fields1 = [after: "val", page: "page_data", data: [:content], validation_stamp: [:timestamp]]
+all_Fields2 = [page: "page_data", data: [:content], validation_stamp: [:timestamp]]
+all_Fields3 = [after: "val", data: [:content], validation_stamp: [:timestamp]]
+all_Fields4 = [data: [:content], validation_stamp: [:timestamp]]
+all_Fields5 = [after: nil, page: nil, data: [:content], validation_stamp: [:timestamp]]
+all_Fields6 = [after: "val", page: nil, data: [:content], validation_stamp: [:timestamp]]
+all_Fields7 = [after: nil, page: "page_data", data: [:content], validation_stamp: [:timestamp]]
+all_Fields8 = [after: nil, data: [:content], validation_stamp: [:timestamp]]
+all_Fields9 = [page: nil, data: [:content], validation_stamp: [:timestamp]]
+all_Fields10 = [:address, :type]
+
+all_fields =
+  [all_Fields10] ++
+    [all_Fields9] ++
+    [all_Fields8] ++
+    [all_Fields1] ++
+    [all_Fields2] ++
+    [all_Fields3] ++ [all_Fields4] ++ [all_Fields5] ++ [all_Fields6] ++ [all_Fields7]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  [:address, :type],
+  [page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", page: "page_data", data: [:content], validation_stamp: [:timestamp]],
+  [page: "page_data", data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", data: [:content], validation_stamp: [:timestamp]],
+  [data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, page: "page_data", data: [:content], validation_stamp: [:timestamp]]
+]
+```
+
+```elixir
+defmodule Mod do
+  def get_options_and_fields(element) do
+    case element do
+      {key, _value} -> key in [:after, :page]
+      _ -> false
+    end
+  end
+
+  def get_transaction_chain_query(address, []) do
+    {" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+     [address]}
+  end
+
+  def get_transaction_chain_query(address, after: nil, page: _current_page_state) do
+    {" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+     [address]}
+  end
+
+  def get_transaction_chain_query(address, after: nil) do
+    {" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+     [address]}
+  end
+
+  def get_transaction_chain_query(address, page: _current_page_state) do
+    {" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+     [address]}
+  end
+
+  def get_transaction_chain_query(address,
+        after: after_time,
+        page: _current_page_state
+      ) do
+    {" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp >=  ? ",
+     [address, after_time]}
+  end
+
+  def get_transaction_chain_query(address,
+        after: after_time
+      ) do
+    {" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp >=  ? ",
+     [address, after_time]}
+  end
+
+  def get_transaction_chain_options(_address, []),
+    do: [page_size: 10]
+
+  def get_transaction_chain_options(_address, after: _after_time),
+    do: [page_size: 10]
+
+  def get_transaction_chain_options(_address, after: _after_time, page: nil),
+    do: [page_size: 10]
+
+  def get_transaction_chain_options(_address, after: _after_time, page: current_page_state),
+    do: [page_size: 10, paging_state: current_page_state]
+
+  def get_transaction_chain_options(_address, page: current_page_state),
+    do: [page_size: 10, paging_state: current_page_state]
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, Mod, <<70, 79, 82, 49, 0, 0, 10, ...>>, {:get_transaction_chain_options, 2}}
+```
+
+```elixir
+all_fields
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  [:address, :type],
+  [page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", page: "page_data", data: [:content], validation_stamp: [:timestamp]],
+  [page: "page_data", data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", data: [:content], validation_stamp: [:timestamp]],
+  [data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: "val", page: nil, data: [:content], validation_stamp: [:timestamp]],
+  [after: nil, page: "page_data", data: [:content], validation_stamp: [:timestamp]]
+]
+```
+
+```elixir
+all_fields
+|> Enum.each(fn x ->
+  {options, fields} =
+    x
+    |> Enum.split_while(&Mod.get_options_and_fields(&1))
+    |> IO.inspect()
+end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: variable "fields" is unused (if the variable is not meant to be used, prefix it with an underscore)
+  list patttern mathcing.livemd#cell:3
+
+warning: variable "options" is unused (if the variable is not meant to be used, prefix it with an underscore)
+  list patttern mathcing.livemd#cell:3
+
+{[], [:address, :type]}
+{[page: nil], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: nil], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: "val", page: "page_data"],
+ [data: [:content], validation_stamp: [:timestamp]]}
+{[page: "page_data"], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: "val"], [data: [:content], validation_stamp: [:timestamp]]}
+{[], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: nil, page: nil], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: "val", page: nil], [data: [:content], validation_stamp: [:timestamp]]}
+{[after: nil, page: "page_data"],
+ [data: [:content], validation_stamp: [:timestamp]]}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+```elixir
+all_fields
+|> Enum.each(fn x ->
+  {options, fields} = x |> Enum.split_while(&Mod.get_options_and_fields(&1))
+  IO.inspect(Mod.get_transaction_chain_query("asd1", options))
+  IO.inspect(Mod.get_transaction_chain_options("dsa", options))
+end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+warning: variable "fields" is unused (if the variable is not meant to be used, prefix it with an underscore)
+  list patttern mathcing.livemd#cell:3
+
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10, paging_state: nil]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10]
+{" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp >=  ? ",
+ ["asd1", "val"]}
+[page_size: 10, paging_state: "page_data"]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10, paging_state: "page_data"]
+{" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp >=  ? ",
+ ["asd1", "val"]}
+[page_size: 10]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10]
+{" SELECT transaction_address FROM archethic.transaction_chains WHERE chain_address = ? AND transaction_timestamp >=  ? ",
+ ["asd1", "val"]}
+[page_size: 10]
+{" SELECT transaction_address   FROM archethic.transaction_chains WHERE chain_address = ? ",
+ ["asd1"]}
+[page_size: 10, paging_state: "page_data"]
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```

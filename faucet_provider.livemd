@@ -1,0 +1,26 @@
+# drain faucet
+
+## install mint
+
+```elixir
+Mix.install([{:mint, "~> 1.0"}])
+```
+
+## faucetProvider
+
+```elixir
+{:ok, conn} = Mint.HTTP.connect(:https, "testnet.archethic.net", 443)
+{:ok, conn, request_ref} = Mint.HTTP.request(conn, "GET", "/faucet", [], "")
+
+receive do
+  message ->
+    case Mint.HTTP.stream(conn, message) do
+      :unknown -> IO.inspect(message, label: "error")
+      {:ok, conn, responses} -> IO.inspect(responses)
+    end
+end
+```
+
+```elixir
+# {:ok, conn, request_ref} = Mint.HTTP.request(conn, "POST", "/faucet", [], "_csrf_token=CWowC24YCgBeMjxAaQAmcgpnGxd1Kx48GYJE6oMh-ejx3Ia-8RVfFmOE&address=00006ff089f697b599d71e3f0303c139aa7cf3c337c2f910acb490aad06922cc0178")
+```
